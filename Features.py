@@ -10,6 +10,7 @@ import matplotlib.gridspec as gridspec
 import os
 import ntpath
 
+import scipy.misc as scimsc
 from sklearn.svm import LinearSVC
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
@@ -29,16 +30,16 @@ class Features:
 
     def bin_spatial(self, img, size=(32, 32)):
         # Use cv2.resize().ravel() to create the feature vector
-        features = cv2.resize(img*255, size).ravel() 
+        features = cv2.resize(img, size).ravel() 
         # Return the feature vector
         return features
 
     # Define a function to compute color histogram features  
     def color_hist(self, img, nbins=32, bins_range=(0, 256)):
         # Compute the histogram of the color channels separately
-        self.channel1_hist = np.histogram(img[:,:,0]*255, bins=nbins, range=bins_range)
-        self.channel2_hist = np.histogram(img[:,:,1]*255, bins=nbins, range=bins_range)
-        self.channel3_hist = np.histogram(img[:,:,2]*255, bins=nbins, range=bins_range)
+        self.channel1_hist = np.histogram(img[:,:,0], bins=nbins, range=bins_range)
+        self.channel2_hist = np.histogram(img[:,:,1], bins=nbins, range=bins_range)
+        self.channel3_hist = np.histogram(img[:,:,2], bins=nbins, range=bins_range)
         # Concatenate the histograms into a single feature vector
         hist_features = np.concatenate((self.channel1_hist[0], self.channel2_hist[0], self.channel3_hist[0]))
         # Return the individual histograms, bin_centers and feature vector
@@ -68,6 +69,7 @@ class Features:
     # Define a function to return HOG features and visualization
     def get_hog_features(self, img, orient, pix_per_cell, cell_per_block, 
                         feature_vec=True):
+        #gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         # Call with two outputs if vis==True
         if self.debug_mode == True:
             featuresR, self.hog_imageR = hog(img[:,:,0], orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
@@ -91,7 +93,11 @@ class Features:
             featuresB = hog(img[:,:,2], orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
                        cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=True, 
                        visualise=False, feature_vector=feature_vec)
+            #features = hog(gray, orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
+            #           cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=True, 
+            #           visualise=False, feature_vector=feature_vec)
             return featuresR, featuresG, featuresB
+            #return features
 
     def dump_hog_images(self):
         filename = self.filename + "_hog_R.png"
@@ -120,6 +126,10 @@ class Features:
                 feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
             elif cspace == 'YUV':
                 feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
+            elif cspace == 'LAB':
+                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+            elif cspace == 'YCrCb':
+                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YCR_CB)
         else: feature_image = np.copy(image)      
         # Apply bin_spatial() to get spatial color features
         spatial_features = self.bin_spatial(feature_image, size=spatial_size)
@@ -128,8 +138,13 @@ class Features:
         # Call get_hog_features() with vis=False, feature_vec=True
         hog_features_R, hog_features_G, hog_features_B = self.get_hog_features(feature_image, orient, 
                         pix_per_cell, cell_per_block, feature_vec=True)
+        #hog_features = self.get_hog_features(feature_image, orient, 
+        #                pix_per_cell, cell_per_block, feature_vec=True)
         # Append the new feature vector to the features list
-        features = np.concatenate((spatial_features, hist_features, hog_features_R, hog_features_G, hog_features_B))
+        #features = np.concatenate((spatial_features, hist_features, hog_features_R, hog_features_G, hog_features_B))
+        #features = np.concatenate((spatial_features, hist_features, hog_features))
+        features = np.concatenate((hist_features, hog_features_R, hog_features_G, hog_features_B))
+        #features = np.concatenate((hog_features_R, hog_features_G, hog_features_B))
 
         # Return list of feature vectors
         return features
@@ -143,7 +158,7 @@ class Features:
         # Iterate through the list of images
         for file in imgs:
             # Read in each one by one
-            image = mpimg.imread(file)
+            image = scimsc.imread(file)
             
             image_features = self.extract_features(image, cspace=cspace, spatial_size=spatial_size,
                         hist_bins=hist_bins, hist_range=hist_range, orient=orient, 

@@ -12,6 +12,7 @@ import matplotlib.gridspec as gridspec
 import os
 import ntpath
 
+from moviepy.editor import VideoFileClip
 from Features import Features
 from sklearn.svm import LinearSVC
 from sklearn.svm import SVC
@@ -21,7 +22,7 @@ from sklearn.externals import joblib
 from skimage.feature import hog
 
 test_image = True
-test_video = False
+
 debug_mode = False
 
 def pyramid(image, scale=1.5, minSize=(30, 30)):
@@ -42,10 +43,11 @@ def pyramid(image, scale=1.5, minSize=(30, 30)):
 		# yield the next image in the pyramid
 		yield image
 
-def classify_boxes(img, bboxes, color=(0, 0, 255), thick=6):
+def classify_boxes(img, bboxes, color=(0, 0, 255), thick=6, frame_number=0):
     # Make a copy of the image
-    imcopy = np.copy(img)
+    #imcopy = np.copy(img)
     i = 0
+    bbox_list = []
     # Iterate through the bounding boxes
     for bbox in bboxes:
         # check prediction
@@ -54,38 +56,61 @@ def classify_boxes(img, bboxes, color=(0, 0, 255), thick=6):
         # Resize the sub_image to 64x64
         sub_image_resized = cv2.resize(sub_image, (64, 64))
         # filename for debug
-        t = time.time()
-        head, tail = ntpath.split(fname)
-        filename = "./debug/" + os.path.splitext(tail)[0] + "_" + str(t) + "_" + str(i) 
+        filename = "./debug/frame" + str(frame_number) + "_" + str(i) 
 
         sub_image_f = Features(filename=filename, debug_mode=False)
-        sub_image_features = sub_image_f.extract_features(sub_image_resized) 
+        sub_image_features = sub_image_f.extract_features(sub_image_resized, cspace='YCrCb') 
         sub_image_features = sub_image_features.reshape(1, -1)
 
         # Use scalar to normalize feature list
         scaled_X = X_scaler.transform(sub_image_features)
 
         if cal.predict(scaled_X) == 1:
-            # Draw a rectangle given bbox coordinates
-            cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
+            #if debug_mode:
+                # Draw a rectangle given bbox coordinates
+                #cv2.rectangle(imcopy, bbox[0], bbox[1], (255,0,0), thick)
             # Confidence score
             #confidence_score = clf.decision_function(scaled_X)
             confidence_score = cal.predict_proba(scaled_X)
-            print(confidence_score)
-            if confidence_score[0][1] > 0.9:
+            #print(confidence_score)
+            #if confidence_score[0][1] > 0.9:
                 # Draw a rectangle given bbox coordinates
-                cv2.rectangle(imcopy, bbox[0], bbox[1], (255,0,0), thick)
+                #cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
+                # Append window position to list
+                #bbox_list.append(bbox)
+            bbox_list.append((bbox, confidence_score[0][1]))
             # Dump for debug
-            filename = filename + "_" + str(confidence_score) + ".png"
-            mpimg.imsave(filename, sub_image_resized)
             if debug_mode:
+                filename = filename + "_" + str(confidence_score) + ".png"
+                mpimg.imsave(filename, sub_image_resized)
                 sub_image_f.dump_color_hist()
                 sub_image_f.dump_hog_images()
 
         i = i + 1
     # Return the image copy with boxes drawn
+    #return imcopy
+    return bbox_list
+
+def draw_car_rects(img, bboxes):
+    # Make a copy of the image
+    imcopy = np.copy(img)
+    i = 0
+    # Iterate through the boxes
+    for bbox in bboxes:
+        bb = bbox[0]
+        confidence_score = bbox[1]
+        if confidence_score >= 0.6 and confidence_score < 0.7:
+            cv2.rectangle(imcopy, bb[0], bb[1], (0,0,255), 6) 
+        elif confidence_score >= 0.7 and confidence_score < 0.8:
+            cv2.rectangle(imcopy, bb[0], bb[1], (0,255,255), 6) 
+        elif confidence_score >= 0.8 and confidence_score < 0.9:
+            cv2.rectangle(imcopy, bb[0], bb[1], (0,255,0), 6) 
+        elif confidence_score >= 0.9 and confidence_score < 0.95:
+            cv2.rectangle(imcopy, bb[0], bb[1], (255,255,0), 6) 
+        elif confidence_score >= 0.95 and confidence_score <= 1.0:
+            cv2.rectangle(imcopy, bb[0], bb[1], (255,0,0), 6) 
+
     return imcopy
-    
     
 # Define a function that takes an image,
 # start and stop positions in both x and y, 
@@ -109,8 +134,10 @@ def slide_window(img, x_start_stop=[None, None], y_start_stop=[None, None],
     nx_pix_per_step = np.int(xy_window[0]*(1 - xy_overlap[0]))
     ny_pix_per_step = np.int(xy_window[1]*(1 - xy_overlap[1]))
     # Compute the number of windows in x/y
-    nx_windows = np.int(xspan/nx_pix_per_step) - 1
-    ny_windows = np.int(yspan/ny_pix_per_step) - 1
+    #nx_windows = np.int(xspan/nx_pix_per_step) - 1
+    #ny_windows = np.int(yspan/ny_pix_per_step) - 1
+    nx_windows = np.int((xspan-xy_window[0])/nx_pix_per_step)
+    ny_windows = np.int((yspan-xy_window[1])/ny_pix_per_step)
     # Initialize a list to append window positions to
     window_list = []
     # Loop through finding x and y window positions
@@ -131,22 +158,42 @@ def slide_window(img, x_start_stop=[None, None], y_start_stop=[None, None],
 
 # Define pipeline
 def process_image(img):
+    possible_cars = []
     # Run different size sliding windows over image
-    #windows = slide_window(img, x_start_stop=[None, None], y_start_stop=[320, None], 
-    #                    xy_window=(256, 256), xy_overlap=(0.5, 0.5))
-    #window_img = classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
-    windows = slide_window(img, x_start_stop=[None, None], y_start_stop=[320, None], 
-                        xy_window=(128, 128), xy_overlap=(0.5, 0.5))
-    window_img = classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
-    #windows = slide_window(img, x_start_stop=[300, 1000], y_start_stop=[320, 480], 
-    #                    xy_window=(64, 64), xy_overlap=(0.5, 0.5))
-    #window_img = classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
-    #windows = slide_window(img, x_start_stop=[400, 900], y_start_stop=[320, 480], 
-    #                    xy_window=(32, 32), xy_overlap=(0.5, 0.5))
-    #window_img = classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
-    #windows = slide_window(img, x_start_stop=[400, 900], y_start_stop=[320, 480], 
+    windows = slide_window(img, x_start_stop=[None, None], y_start_stop=[380, 700], 
+                        xy_window=(256, 256), xy_overlap=(0.9, 0.9))
+    print(len(windows))
+    possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)
+    #print(len(possible_cars))
+    windows = slide_window(img, x_start_stop=[None, None], y_start_stop=[380, 600], 
+                        xy_window=(128, 128), xy_overlap=(0.85, 0.85))
+    print(len(windows))
+    possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)
+    #print(len(possible_cars))
+    windows = slide_window(img, x_start_stop=[300, 1000], y_start_stop=[380, 480], 
+                        xy_window=(64, 64), xy_overlap=(0.75, 0.75))
+    print(len(windows))
+    possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
+    #print(len(possible_cars))
+    windows = slide_window(img, x_start_stop=[400, 900], y_start_stop=[380, 480], 
+                        xy_window=(32, 32), xy_overlap=(0.5, 0.5))
+    print(len(windows))
+    possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
+    #print(len(possible_cars))
+    #windows = slide_window(img, x_start_stop=[500, 900], y_start_stop=[380, 480], 
     #                    xy_window=(16, 16), xy_overlap=(0.5, 0.5))
-    #window_img = classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
+    #print(len(windows))
+    #possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
+
+    # Draw the windows
+    window_img = draw_car_rects(img, possible_cars)    
+
+    # Draw checked areas for debug
+    #cv2.rectangle(window_img, (0,380), (1280,700), (0,0,255), 6) 
+    #cv2.rectangle(window_img, (0,380), (1280,600), (0,0,255), 6) 
+    #cv2.rectangle(window_img, (300,380), (1000,480), (0,0,255), 6) 
+    #cv2.rectangle(window_img, (400,380), (900,480), (0,0,255), 6) 
+    #cv2.rectangle(window_img, (500,380), (900,480), (0,0,255), 6) 
 
     return window_img
                            
@@ -190,7 +237,7 @@ if test_image:
         i += 2
     plt.show()
 
-if test_video:
+else: # test video
     print("Running on test video1...")
     #####################################
     # Run our pipeline on the test video 

@@ -25,10 +25,10 @@ print("Found {} non-car images".format(len(notcars)))
 
 print("Extrating feature vectors from car images...")
 car_f= Features()
-car_features = car_f.extract_image_file_features(cars)
+car_features = car_f.extract_image_file_features(cars, cspace='YCrCb')
 print("Extrating feature vectors from notcar images...")
 notcar_f= Features()
-notcar_features = notcar_f.extract_image_file_features(notcars)
+notcar_features = notcar_f.extract_image_file_features(notcars, cspace='YCrCb')
 
 # Create an array stack of feature vectors
 X = np.vstack((car_features, notcar_features)).astype(np.float64)                        
