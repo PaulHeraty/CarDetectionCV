@@ -14,6 +14,7 @@ import ntpath
 
 from moviepy.editor import VideoFileClip
 from Features import Features
+from Cars import Cars
 from sklearn.svm import LinearSVC
 from sklearn.svm import SVC
 from sklearn.calibration import CalibratedClassifierCV
@@ -21,7 +22,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.externals import joblib
 from skimage.feature import hog
 
-test_image = True
+test_image = False
 
 debug_mode = False
 
@@ -44,8 +45,6 @@ def pyramid(image, scale=1.5, minSize=(30, 30)):
 		yield image
 
 def classify_boxes(img, bboxes, color=(0, 0, 255), thick=6, frame_number=0):
-    # Make a copy of the image
-    #imcopy = np.copy(img)
     i = 0
     bbox_list = []
     # Iterate through the bounding boxes
@@ -66,18 +65,9 @@ def classify_boxes(img, bboxes, color=(0, 0, 255), thick=6, frame_number=0):
         scaled_X = X_scaler.transform(sub_image_features)
 
         if cal.predict(scaled_X) == 1:
-            #if debug_mode:
-                # Draw a rectangle given bbox coordinates
-                #cv2.rectangle(imcopy, bbox[0], bbox[1], (255,0,0), thick)
             # Confidence score
-            #confidence_score = clf.decision_function(scaled_X)
             confidence_score = cal.predict_proba(scaled_X)
             #print(confidence_score)
-            #if confidence_score[0][1] > 0.9:
-                # Draw a rectangle given bbox coordinates
-                #cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
-                # Append window position to list
-                #bbox_list.append(bbox)
             bbox_list.append((bbox, confidence_score[0][1]))
             # Dump for debug
             if debug_mode:
@@ -88,30 +78,8 @@ def classify_boxes(img, bboxes, color=(0, 0, 255), thick=6, frame_number=0):
 
         i = i + 1
     # Return the image copy with boxes drawn
-    #return imcopy
     return bbox_list
 
-def draw_car_rects(img, bboxes):
-    # Make a copy of the image
-    imcopy = np.copy(img)
-    i = 0
-    # Iterate through the boxes
-    for bbox in bboxes:
-        bb = bbox[0]
-        confidence_score = bbox[1]
-        if confidence_score >= 0.6 and confidence_score < 0.7:
-            cv2.rectangle(imcopy, bb[0], bb[1], (0,0,255), 6) 
-        elif confidence_score >= 0.7 and confidence_score < 0.8:
-            cv2.rectangle(imcopy, bb[0], bb[1], (0,255,255), 6) 
-        elif confidence_score >= 0.8 and confidence_score < 0.9:
-            cv2.rectangle(imcopy, bb[0], bb[1], (0,255,0), 6) 
-        elif confidence_score >= 0.9 and confidence_score < 0.95:
-            cv2.rectangle(imcopy, bb[0], bb[1], (255,255,0), 6) 
-        elif confidence_score >= 0.95 and confidence_score <= 1.0:
-            cv2.rectangle(imcopy, bb[0], bb[1], (255,0,0), 6) 
-
-    return imcopy
-    
 # Define a function that takes an image,
 # start and stop positions in both x and y, 
 # window size (x and y dimensions),  
@@ -162,31 +130,40 @@ def process_image(img):
     # Run different size sliding windows over image
     windows = slide_window(img, x_start_stop=[None, None], y_start_stop=[380, 700], 
                         xy_window=(256, 256), xy_overlap=(0.9, 0.9))
-    print(len(windows))
+    #print(len(windows))
     possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)
     #print(len(possible_cars))
     windows = slide_window(img, x_start_stop=[None, None], y_start_stop=[380, 600], 
-                        xy_window=(128, 128), xy_overlap=(0.85, 0.85))
-    print(len(windows))
+                        xy_window=(128, 128), xy_overlap=(0.9, 0.9))
+    #print(len(windows))
     possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)
     #print(len(possible_cars))
     windows = slide_window(img, x_start_stop=[300, 1000], y_start_stop=[380, 480], 
-                        xy_window=(64, 64), xy_overlap=(0.75, 0.75))
-    print(len(windows))
+                        xy_window=(64, 64), xy_overlap=(0.9, 0.9))
+    #print(len(windows))
     possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
-    #print(len(possible_cars))
-    windows = slide_window(img, x_start_stop=[400, 900], y_start_stop=[380, 480], 
-                        xy_window=(32, 32), xy_overlap=(0.5, 0.5))
-    print(len(windows))
-    possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
+    #print("Possible Cars: {}".format(len(possible_cars)))
+    #print(possible_cars)
+    #windows = slide_window(img, x_start_stop=[400, 900], y_start_stop=[380, 480], 
+    #                    xy_window=(32, 32), xy_overlap=(0.5, 0.5))
+    #print(len(windows))
+    #possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
     #print(len(possible_cars))
     #windows = slide_window(img, x_start_stop=[500, 900], y_start_stop=[380, 480], 
     #                    xy_window=(16, 16), xy_overlap=(0.5, 0.5))
     #print(len(windows))
     #possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
 
+    # Determine primary color of cars
+    #cars.determine_car_colors(img, possible_cars)
+
+    # Pass possible car windows to Car class to determine Cars
+    cars.detect_from_possible_windows(possible_cars)
+    #print("Merged Cars: {}".format(len(car_boxes)))
+
     # Draw the windows
-    window_img = draw_car_rects(img, possible_cars)    
+    window_img = cars.draw_car_rects(img)    
+
 
     # Draw checked areas for debug
     #cv2.rectangle(window_img, (0,380), (1280,700), (0,0,255), 6) 
@@ -204,6 +181,7 @@ cal = joblib.load('./models/calibrated.pkl')
 # Load the standard scalar model
 X_scaler = joblib.load('./models/scaler.pkl')
 
+
 if test_image:
     print("Running on test images...")
     #####################################
@@ -220,6 +198,9 @@ if test_image:
 
     for fname in images:
         print("Processing image {}".format(fname))
+          
+        # Create a new Cars object for each (un-related) image
+        cars = Cars(debug_mode=True)
 
         # Next, let's read in a test image
         img = mpimg.imread(fname)
@@ -239,6 +220,10 @@ if test_image:
 
 else: # test video
     print("Running on test video1...")
+
+    # Create a new Cars object for tracking cars
+    cars = Cars(debug_mode=False)
+
     #####################################
     # Run our pipeline on the test video 
     #####################################
