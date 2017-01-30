@@ -52,15 +52,15 @@ class Features:
         plt.subplot(131)
         plt.bar(bin_centers, self.channel1_hist[0])
         plt.xlim(0, 256)
-        plt.title('R Histogram')
+        plt.title('Channel 1')
         plt.subplot(132)
         plt.bar(bin_centers, self.channel2_hist[0])
         plt.xlim(0, 256)
-        plt.title('G Histogram')
+        plt.title('Channel 2')
         plt.subplot(133)
         plt.bar(bin_centers, self.channel3_hist[0])
         plt.xlim(0, 256)
-        plt.title('B Histogram')
+        plt.title('Channel 3')
         fig.tight_layout()
         plt.savefig(self.filename + "_color_hist.png")
         plt.close()
@@ -69,7 +69,6 @@ class Features:
     # Define a function to return HOG features and visualization
     def get_hog_features(self, img, orient, pix_per_cell, cell_per_block, 
                         feature_vec=True):
-        #gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         # Call with two outputs if vis==True
         if self.debug_mode == True:
             featuresR, self.hog_imageR = hog(img[:,:,0], orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
@@ -93,18 +92,14 @@ class Features:
             featuresB = hog(img[:,:,2], orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
                        cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=True, 
                        visualise=False, feature_vector=feature_vec)
-            #features = hog(gray, orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
-            #           cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=True, 
-            #           visualise=False, feature_vector=feature_vec)
             return featuresR, featuresG, featuresB
-            #return features
 
     def dump_hog_images(self):
-        filename = self.filename + "_hog_R.png"
+        filename = self.filename + "_hog_1.png"
         mpimg.imsave(filename, self.hog_imageR)
-        filename = self.filename + "_hog_G.png"
+        filename = self.filename + "_hog_2.png"
         mpimg.imsave(filename, self.hog_imageG)
-        filename = self.filename + "_hog_B.png"
+        filename = self.filename + "_hog_3.png"
         mpimg.imsave(filename, self.hog_imageB)
 
     # Define a function to extract features from a list of images
@@ -132,14 +127,12 @@ class Features:
                 feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YCR_CB)
         else: feature_image = np.copy(image)      
         # Apply bin_spatial() to get spatial color features
-        spatial_features = self.bin_spatial(feature_image, size=spatial_size)
+        #spatial_features = self.bin_spatial(feature_image, size=spatial_size)
         # Apply color_hist() also with a color space option now
         hist_features = self.color_hist(feature_image, nbins=hist_bins, bins_range=hist_range)
         # Call get_hog_features() with vis=False, feature_vec=True
         hog_features_R, hog_features_G, hog_features_B = self.get_hog_features(feature_image, orient, 
                         pix_per_cell, cell_per_block, feature_vec=True)
-        #hog_features = self.get_hog_features(feature_image, orient, 
-        #                pix_per_cell, cell_per_block, feature_vec=True)
         # Append the new feature vector to the features list
         #features = np.concatenate((spatial_features, hist_features, hog_features_R, hog_features_G, hog_features_B))
         #features = np.concatenate((spatial_features, hist_features, hog_features))

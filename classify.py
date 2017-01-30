@@ -26,24 +26,6 @@ test_image = False
 
 debug_mode = False
 
-def pyramid(image, scale=1.5, minSize=(30, 30)):
-	# yield the original image
-	yield image
- 
-	# keep looping over the pyramid
-	while True:
-		# compute the new dimensions of the image and resize it
-		w = int(image.shape[1] / scale)
-		image = imutils.resize(image, width=w)
- 
-		# if the resized image does not meet the supplied minimum
-		# size, then stop constructing the pyramid
-		if image.shape[0] < minSize[1] or image.shape[1] < minSize[0]:
-			break
- 
-		# yield the next image in the pyramid
-		yield image
-
 def classify_boxes(img, bboxes, color=(0, 0, 255), thick=6, frame_number=0):
     i = 0
     bbox_list = []
@@ -57,7 +39,7 @@ def classify_boxes(img, bboxes, color=(0, 0, 255), thick=6, frame_number=0):
         # filename for debug
         filename = "./debug/frame" + str(frame_number) + "_" + str(i) 
 
-        sub_image_f = Features(filename=filename, debug_mode=False)
+        sub_image_f = Features(filename=filename, debug_mode=debug_mode)
         sub_image_features = sub_image_f.extract_features(sub_image_resized, cspace='YCrCb') 
         sub_image_features = sub_image_features.reshape(1, -1)
 
@@ -70,10 +52,10 @@ def classify_boxes(img, bboxes, color=(0, 0, 255), thick=6, frame_number=0):
             #print(confidence_score)
             bbox_list.append((bbox, confidence_score[0][1]))
             # Dump for debug
-            if debug_mode:
+            if debug_mode and 0:
                 filename = filename + "_" + str(confidence_score) + ".png"
                 mpimg.imsave(filename, sub_image_resized)
-                sub_image_f.dump_color_hist()
+                #sub_image_f.dump_color_hist()
                 sub_image_f.dump_hog_images()
 
         i = i + 1
@@ -102,8 +84,6 @@ def slide_window(img, x_start_stop=[None, None], y_start_stop=[None, None],
     nx_pix_per_step = np.int(xy_window[0]*(1 - xy_overlap[0]))
     ny_pix_per_step = np.int(xy_window[1]*(1 - xy_overlap[1]))
     # Compute the number of windows in x/y
-    #nx_windows = np.int(xspan/nx_pix_per_step) - 1
-    #ny_windows = np.int(yspan/ny_pix_per_step) - 1
     nx_windows = np.int((xspan-xy_window[0])/nx_pix_per_step)
     ny_windows = np.int((yspan-xy_window[1])/ny_pix_per_step)
     # Initialize a list to append window positions to
@@ -142,20 +122,7 @@ def process_image(img):
                         xy_window=(64, 64), xy_overlap=(0.9, 0.9))
     #print(len(windows))
     possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
-    #print("Possible Cars: {}".format(len(possible_cars)))
     #print(possible_cars)
-    #windows = slide_window(img, x_start_stop=[400, 900], y_start_stop=[380, 480], 
-    #                    xy_window=(32, 32), xy_overlap=(0.5, 0.5))
-    #print(len(windows))
-    #possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
-    #print(len(possible_cars))
-    #windows = slide_window(img, x_start_stop=[500, 900], y_start_stop=[380, 480], 
-    #                    xy_window=(16, 16), xy_overlap=(0.5, 0.5))
-    #print(len(windows))
-    #possible_cars = possible_cars + classify_boxes(img, windows, color=(0, 0, 255), thick=6)                    
-
-    # Determine primary color of cars
-    #cars.determine_car_colors(img, possible_cars)
 
     # Pass possible car windows to Car class to determine Cars
     cars.detect_from_possible_windows(possible_cars)
@@ -163,14 +130,6 @@ def process_image(img):
 
     # Draw the windows
     window_img = cars.draw_car_rects(img)    
-
-
-    # Draw checked areas for debug
-    #cv2.rectangle(window_img, (0,380), (1280,700), (0,0,255), 6) 
-    #cv2.rectangle(window_img, (0,380), (1280,600), (0,0,255), 6) 
-    #cv2.rectangle(window_img, (300,380), (1000,480), (0,0,255), 6) 
-    #cv2.rectangle(window_img, (400,380), (900,480), (0,0,255), 6) 
-    #cv2.rectangle(window_img, (500,380), (900,480), (0,0,255), 6) 
 
     return window_img
                            
@@ -200,7 +159,7 @@ if test_image:
         print("Processing image {}".format(fname))
           
         # Create a new Cars object for each (un-related) image
-        cars = Cars(debug_mode=True)
+        cars = Cars(debug_mode=debug_mode)
 
         # Next, let's read in a test image
         img = mpimg.imread(fname)
@@ -222,7 +181,7 @@ else: # test video
     print("Running on test video1...")
 
     # Create a new Cars object for tracking cars
-    cars = Cars(debug_mode=False)
+    cars = Cars(debug_mode=debug_mode)
 
     #####################################
     # Run our pipeline on the test video 
